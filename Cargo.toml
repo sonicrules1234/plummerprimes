@@ -1,0 +1,24 @@
+[package]
+name = "plummerprimes"
+version = "0.1.6"
+edition = "2021"
+description = "Builds, Runs, and reports benchmarks from https://github.com/PlummersSoftwareLLC/Primes"
+license-file = "LICENSE"
+repository = "https://github.com/sonicrules1234/plummerprimes"
+readme = "README.md"
+homepage = "https://github.com/sonicrules1234/plummerprimes"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ctrlc = "3.2.1"
+de-regex = "0.1.0"
+nix = "0.23.0"
+regex = "1.5.4"
+rmp-serde = "0.15.5"
+serde = { version = "1.0.126", features = ["derive"] }
+structopt = "0.3.25"
+table_print = "0.1.0"
+termsize = "0.1.6"
+
+[features]
