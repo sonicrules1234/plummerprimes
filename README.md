@@ -1,14 +1,16 @@
 # Setup
 This program is meant to be run in the https://github.com/PlummersSoftwareLLC/Primes repo.
 
+```
 git clone https://github.com/PlummersSoftwareLLC/Primes.git
 
 cd Primes
 
 cp /path/to/plummerprimes/binary ./
+```
 
 # Running the program
-
+```
 USAGE:
 
     plummerprimes [FLAGS] [OPTIONS]
@@ -36,3 +38,4 @@ OPTIONS:
     -r, --report-dir <report-dir>      Write report file(s) to given file [default: ./]
 
     -s, --save-file <save-file>        Write save to given file [default: save.db]
+```
