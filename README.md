@@ -1,7 +1,18 @@
-# Setup
-This program is meant to be run in the https://github.com/PlummersSoftwareLLC/Primes repo.
+# Requirements
+- docker
 
-Make sure to follow the setup directions from it too (You don't need nodejs for this though)
+# Setup
+This program is meant to be run in the https://github.com/PlummersSoftwareLLC/Primes
+
+Install docker
+
+After the installation you need to enable docker as non-root user. Take the following steps:
+
+```sudo groupadd docker```
+
+```sudo usermod -aG docker $USER```
+
+Log out and log back in so that your group membership is re-evaluated.
 
 ```
 git clone https://github.com/PlummersSoftwareLLC/Primes.git
