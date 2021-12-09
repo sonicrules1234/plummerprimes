@@ -1,6 +1,8 @@
 # Setup
 This program is meant to be run in the https://github.com/PlummersSoftwareLLC/Primes repo.
 
+Make sure to follow the setup directions from it too (You don't need nodejs for this though)
+
 ```
 git clone https://github.com/PlummersSoftwareLLC/Primes.git
 
