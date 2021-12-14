@@ -60,7 +60,7 @@ struct PlummerPrimesConfig {
     #[structopt(short, long="list-formatters")]
     list_formatters: bool,
 
-    /// Build and run specified solution name [example: primerust_solution_1]
+    /// Build and run specified solution name (Does not save to the save file) [example: primerust_solution_1]
     #[structopt(short, long)]
     solution: Option<String>,
 
@@ -144,15 +144,6 @@ struct CompatOutput {
 
 impl From<RegexOutput> for RunOutput {
     fn from(val: RegexOutput) -> RunOutput {
-        /*
-        let mut extra: HashMap<String, String> = HashMap::new();
-        if let Some(val_extra) = val.clone().extra {
-            for key_val in val_extra.split(",") {
-                let (key, value) = key_val.split_once("=").unwrap();
-                extra.insert(key.to_string(), value.to_string());
-            }
-        }
-        */
         RunOutput {
             label: val.clone().label,
             passes: val.clone().passes,
@@ -172,18 +163,6 @@ struct JSONCompatOutput {
     machine: crate::systeminformation::Machine,
     results: Vec<CompatOutput>,
 }
-/*
-impl JSONCompatOutput {
-    async fn new(results: Vec<CompatOutput>, extra_data: crate::systeminformation::ExtraData) -> Self {
-        Self {
-            version: extra_data.version,
-            metadata: extra_data.metadata,
-            machine: extra_data.machine,
-            results: results,
-        }
-    }
-}
-*/
 
 impl From<SaveOutput> for JSONCompatOutput {
     fn from(val: SaveOutput) -> JSONCompatOutput {
@@ -194,7 +173,7 @@ impl From<SaveOutput> for JSONCompatOutput {
         for old_result in all_results {
             let mut tags: HashMap<String, String> = HashMap::new();
             let mut mut_result = old_result.clone();
-            let implementation = mut_result["language"].clone().unwrap();
+            let implementation = mut_result["language"].clone().unwrap().to_lowercase();
             mut_result.remove("language");
             let solution_name = mut_result["solution_name"].clone().unwrap();
             let solution = solution_name.split("_").last().unwrap();
@@ -412,13 +391,10 @@ pub async fn run_benchmarks(raw_regex: &str, extra_regex: &str, target: &str) {
         println!("Saved data to {}", opts.clone().save_file.to_str().unwrap());
     }
     output_report(opts.clone().formatter, rmp_serde::encode::to_vec(&save_output).unwrap(), opts.clone().report_base, opts.clone().report_dir, opts.clone().compat);
-    //println!("Saved report to {}", opts.clone().report_file.to_str().unwrap());
 }
 async fn process_docker_output(message: &[u8], buffer: String, outs: Vec<RunOutput>, rx: &Receiver<String>, reg: Regex, extra_reg: Regex,  opts: PlummerPrimesConfig) -> (String, Vec<RunOutput>, String) {
     let mut buf = buffer.clone();
     let mut outputs = outs.clone();
-    //let mut had_error = false;
-    //let mut status = prev_status.clone();
     let mut status = String::new();
     let mut last = String::new();  
     buf.push_str(String::from_utf8_lossy(message).into_owned().as_str());
@@ -437,18 +413,17 @@ async fn process_docker_output(message: &[u8], buffer: String, outs: Vec<RunOutp
         if num == num_items - 1 && last == String::new() {
             break;
         }
-        if opts.debug && last != String::new() {
+        if opts.debug {
             eprintln!("{}", last);
         }
         if reg.clone().is_match(last.as_str()) {
             if opts.debug {
                 eprintln!("Matched");
             }
-            //let reg_out: RegexOutput = de_regex::from_str_regex(last.as_str(), reg.clone()).unwrap();
             let reg_out = RegexOutput::new(reg.clone(), extra_reg.clone(), last.as_str());
             let run_out: RunOutput = reg_out.into();
             outputs.push(run_out);
-        } else if opts.debug {
+        } else if opts.debug  {
             eprintln!("Not a match");
         }
     }
@@ -461,40 +436,7 @@ async fn get_solutions_from(reg: Regex, extra_reg: Regex, name: String, rx: &Rec
         Err(TryRecvError::Empty) => "keepgoing".to_string(),
         Err(TryRecvError::Disconnected) => "disconnected".to_string(), 
     };
-    let mut base_run_args = "run --rm ".to_string();
-    if opts.unconfined {
-        base_run_args.push_str("--security-opt seccomp=unconfined ")
-    }
-    base_run_args.push_str(name.as_str());
     let mut skip_this = false;
-    /*
-    {
-        println!("Building docker container for {}...", name.clone());
-        let mut child = Command::new("docker").arg("build").arg("-t").arg(name.as_str()).arg(directory)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::null())
-        .spawn().unwrap();
-        let exit_status = child.wait().unwrap();
-        if !exit_status.success() {
-            skip_this = true;
-        }
-    }
-    let mut outputs: Vec<RunOutput> = Vec::new();
-    if skip_this {
-        println!("Error building docker container...\nSkipping run...");
-        return outputs;
-    }
-    let mut cmd = Command::new("docker");
-    let mut c = cmd.args(base_run_args.split(" "));
-    if !opts.debug {
-        c = c.stderr(Stdio::null());
-    }
-    let mut child = c//.arg("run").arg("--rm").arg(name.as_str())
-        .stdout(Stdio::piped())
-        .spawn().unwrap();
-    let mut reader = BufReader::new(child.stdout.take().unwrap());
-    */
-    
     println!("Building docker container for {}...", name.clone());
     let docker = Docker::new("unix:///var/run/docker.sock").unwrap();
     let options = BuildOpts::builder(directory).tag(name.clone()).build();
@@ -537,11 +479,9 @@ async fn get_solutions_from(reg: Regex, extra_reg: Regex, name: String, rx: &Rec
     println!("Running {}...", name);
 
     let mut container_opts = ContainerCreateOpts::builder(name.as_str()).name(format!("{}_container", name).as_str()).auto_remove(true);
-    //container_opts.params.insert("HostConfig.SecurityOpt", json!(vec!["seccomp=unconfined"]));
     if opts.clone().unconfined {
         container_opts = container_opts.security_options(vec!["seccomp=unconfined".to_string()])
     }
-    //.build();
     let container = docker.containers().create(&container_opts.build()).await.unwrap();
     let start_result = container.start().await;
     if let Err(e) = start_result {
@@ -552,70 +492,19 @@ async fn get_solutions_from(reg: Regex, extra_reg: Regex, name: String, rx: &Rec
         }
         return outputs;
     }
-    //let logs_options = LogsOpts::builder().stdout(true).stderr(opts.clone().debug).build();
-    //let logs = container.logs(&logs_options).await
     let tty = container.attach().await.unwrap();
     let mut stream = tty.split().0;
-
-    //let mut had_error = true;
     let mut buf = String::new();
-    //let mut logs = container.logs(&logs_options);
     while let Some(msg) = stream.next().await {
         if status.as_str() != "keepgoing" {
             break
         }
-        //println!("Working...");
         let message = msg.unwrap();
         let x = process_docker_output(message.as_ref(), buf, outputs, rx, reg.clone(), extra_reg.clone(), opts.clone()).await;
         buf = x.0.clone();
         outputs = x.1.clone();
         status = x.2.clone();
     }
-    //let mut buff_status = "keepgoing";
-    /*
-    let mut line = String::new();
-    let mut buff_status = match reader.read_line(&mut line) {
-        Ok(0) => "done",
-        Ok(_) => "keepgoing",
-        Err(_) => "error",
-    };
-    while status.as_str() == "keepgoing" && buff_status == "keepgoing" {
-        line = line.trim().to_string();
-        if opts.debug {
-            println!("'{}'", line);
-        }
-        if reg.clone().is_match(line.as_str()) {
-            let reg_out = RegexOutput::new(reg.clone(), last.as_str());
-            //let reg_out: RegexOutput = de_regex::from_str_regex(line.as_str(), reg.clone()).unwrap();
-            let run_out: RunOutput = reg_out.into();
-            outputs.push(run_out);
-        } else if opts.debug {
-            println!("Not a match");
-        }
-        status = match rx.try_recv() {
-            Ok(rx) => rx,
-            Err(TryRecvError::Empty) => "keepgoing".to_string(),
-            Err(TryRecvError::Disconnected) => "disconnected".to_string(), 
-        };
-        if status.as_str() != "keepgoing" {
-            break;
-        }
-        line = String::new();
-        buff_status = match reader.read_line(&mut line) {
-            Ok(0) => "done",
-            Ok(_) => "keepgoing",
-            Err(_) => "error",
-        };
-    }
-    if status.as_str() != "keepgoing" {
-        nix::sys::signal::kill(
-            nix::unistd::Pid::from_raw(child.id() as i32), 
-            nix::sys::signal::Signal::SIGINT
-        ).expect("cannot kill process");
-        child.wait().unwrap();
-        std::process::exit(1);
-    }
-    */
     //assert_eq!(true, outputs.len() > 0 || vec!["primeawk_solution_1", "primecomal_solution_1", "primecsharp_solution_2"].into_iter().map(|a| a.to_string()).collect::<Vec<String>>().contains(&name));
     outputs
 }
@@ -641,8 +530,6 @@ fn output_report(formatter: String, buf: Vec<u8>, base_name: String, report_dir:
     alpha_multi_keys.sort();
     let mut table_single = table_print::Table::new(alpha_single_keys.clone());
     let mut table_multi = table_print::Table::new(alpha_multi_keys.clone());
-    //let mut vec_single: Vec<Vec<String>> = Vec::new();
-    //let mut vec_multi: Vec<Vec<String>> = Vec::new();
     for out in save_output.single {
         let mut this_vec: Vec<String> = Vec::new();
         for key in alpha_single_keys.clone() {
@@ -653,7 +540,6 @@ fn output_report(formatter: String, buf: Vec<u8>, base_name: String, report_dir:
             }
             this_vec.push(value);
         }
-        //println!("{}", this_vec.join(" "));
         table_single.insert_row(this_vec);
     }
     for out in save_output.multi {
@@ -721,7 +607,6 @@ fn output_report(formatter: String, buf: Vec<u8>, base_name: String, report_dir:
                 }
             }
         }
-        //println!("{}", table_single)
     } else if formatter.as_str() == "json" {
         let json_data: String;
         let mut output_path = report_dir.clone();

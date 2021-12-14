@@ -367,7 +367,6 @@ const AMD_SPEEDS: &str = r#"
     '5900X': '3.7',
     '5950X': '3.4'
   };"#;
-//#[allow(non_snake_case)]
 #[derive(Clone, Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CPUInfo {
@@ -474,20 +473,6 @@ impl CPUInfoData {
         let data = fs::read_to_string("/proc/cpuinfo").unwrap().trim().to_string();
         let cpu_data: Vec<String> = data.replace("\r", "").split("\n\n").map(|x| x.to_string()).collect();
         let num_cpus = cpu_data.len();
-        /*
-        let cpu0_data = cpu_data[0];
-        let mut cpu_hashmap: HashMap<String, String> = HashMap::new();
-        
-        for line in cpu0_data.split("\n") {
-            if line.trim() == "" {
-                continue;
-            }
-            let parts = line.split_once(" : ").unwrap();
-            let key = parts.0.trim();
-            let value = parts.1.trim();
-            cpu_hashmap.insert(key.to_string().to_lowercase(), value.to_string());
-        }
-        */
         let cpu_hashmap_vec = Self::parse_cpuinfo_data(cpu_data);
         let cpu_hashmap = cpu_hashmap_vec[0].clone();
         let brand_manufacturer = match cpu_hashmap.get("model name") {
@@ -505,7 +490,6 @@ impl CPUInfoData {
         let model = super::obs_to_os(cpu_hashmap.get("model"));
         let stepping = super::obs_to_os(cpu_hashmap.get("stepping"));
         let revision = super::obs_to_os(cpu_hashmap.get("cpu revision"));
-        //let voltage = None;
         let flags: Vec<String> = cpu_hashmap.get("flags").unwrap().split(" ").map(|x| x.to_string()).collect();
         let virtualization = Some(flags.clone().contains(&"vmx".to_string()) || flags.clone().contains(&"svm".to_string()));
         let mut speed = match brand.clone() {
@@ -587,8 +571,6 @@ impl CPUInfoData {
             cache: Self::get_cache_hashmap(),
         
         }
-        
-
     }
     fn count_physical_ids(data: Vec<HashMap<String, String>>) -> usize {
         let mut physical_core_ids: Vec<String> = Vec::new(); 
@@ -622,11 +604,10 @@ impl CPUInfoData {
     }
     fn get_cache_hashmap() -> HashMap<String, usize> {
         let mut cache_usize: HashMap<String, usize> = HashMap::new();
-        cache_usize.insert("L1d".to_string(), 0);
-        cache_usize.insert("L1i".to_string(), 0);
-        cache_usize.insert("L2".to_string(), 0);
-        cache_usize.insert("L3".to_string(), 0);
-        //let mut cache: HashMap<String, String> = HashMap::new();
+        cache_usize.insert("l1d".to_string(), 0);
+        cache_usize.insert("l1i".to_string(), 0);
+        cache_usize.insert("l2".to_string(), 0);
+        cache_usize.insert("l3".to_string(), 0);
         let mut cache_levels: Vec<(CacheType, u8)> = Vec::new();
         let index_num_regex = Regex::new(r"^index(\d+)$").unwrap();
         let cpu_num_regex = Regex::new(r"^cpu(\d+)$").unwrap();
@@ -634,10 +615,8 @@ impl CPUInfoData {
             //println!("{:?}", x.as_ref().unwrap().file_name().into_string().unwrap().as_str());
             cpu_num_regex.is_match(x.as_ref().unwrap().file_name().into_string().unwrap().as_str())
         });
-        //println!("{:?}", cpu_dirs);
         for cpu_dir_result in cpu_dirs {
             let cpu_dir = cpu_dir_result.unwrap().path();
-            //println!("{:?}", cpu_dir);
             let indexes = fs::read_dir(cpu_dir.join("cache")).unwrap().filter(|y| {
                 //println!("{:?}", y.as_ref().unwrap().file_name().into_string().unwrap().as_str());
                 index_num_regex.is_match(y.as_ref().unwrap().file_name().into_string().unwrap().as_str())
@@ -647,9 +626,7 @@ impl CPUInfoData {
                 let index_type = fs::read_to_string(&index_path.join("type")).unwrap().trim().to_string();
                 let index_level = fs::read_to_string(&index_path.join("level")).unwrap().trim().parse::<u8>().unwrap();
                 let index_id = fs::read_to_string(&index_path.join("id")).unwrap().trim().parse::<usize>().unwrap();
-                //println!("{:?}", fs::read_to_string(&index_path.join("size")).unwrap().trim().split_once("K").unwrap().0);
                 let index_size = fs::read_to_string(&index_path.join("size")).unwrap().trim().split_once("K").unwrap().0.parse::<usize>().unwrap() * 1024;
-                //let cache_type_id_vec: Vec<C>
                 let cache_type: CacheType;
                 if index_type.as_str() == "Unified" {
                     cache_type = CacheType::Unified(index_id);
@@ -662,21 +639,21 @@ impl CPUInfoData {
                     cache_levels.push((cache_type.clone(), index_level));
                     match cache_type {
                         CacheType::Data(_x) => {
-                            let mut current_size = cache_usize.get("L1d").unwrap().to_owned();
+                            let mut current_size = cache_usize.get("l1d").unwrap().to_owned();
                             current_size += index_size;
-                            cache_usize.insert("L1d".to_string(), current_size);
+                            cache_usize.insert("l1d".to_string(), current_size);
                         },
                         CacheType::Instruction(_x) => {
-                            let mut current_size = cache_usize.get("L1i").unwrap().to_owned();
+                            let mut current_size = cache_usize.get("l1i").unwrap().to_owned();
                             current_size += index_size;
-                            cache_usize.insert("L1i".to_string(), current_size);
+                            cache_usize.insert("l1i".to_string(), current_size);
                         },
                         CacheType::Unified(_x) => {
                             let key: String;
                             if index_level == 2 {
-                                key = "L2".to_string();
+                                key = "l2".to_string();
                             } else {
-                                key = "L3".to_string();
+                                key = "l3".to_string();
                             }
                             let mut current_size = cache_usize.get(&key).unwrap().to_owned();
                             current_size += index_size;
@@ -686,13 +663,6 @@ impl CPUInfoData {
                 }
             }
         }
-        /*
-        cache.insert("L1d".to_string(), cache_usize.get("L1d").unwrap().to_string());
-        cache.insert("L1i".to_string(), cache_usize.get("L1i").unwrap().to_string());
-        cache.insert("L2".to_string(), cache_usize.get("L2").unwrap().to_string());
-        cache.insert("L3".to_string(), cache_usize.get("L3").unwrap().to_string());
-        */
-
         cache_usize
     }
 }

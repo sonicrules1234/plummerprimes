@@ -54,7 +54,6 @@ pub struct Machine {
     docker: DockerInfo,
 }
 
-
 impl ExtraData {
     pub async fn new(nodejs_arch: String) -> Self {
         let version = "1".to_string();

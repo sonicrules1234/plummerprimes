@@ -41,5 +41,6 @@ OPTIONS:
     -b, --report-base <report-base>    Report file base name [default: report]
     -r, --report-dir <report-dir>      Write report file(s) to given file [default: ./]
         --save-file <save-file>        Read/Write save from/to given file [default: save.db]
-    -s, --solution <solution>          Build and run specified solution name [example: primerust_solution_1]
+    -s, --solution <solution>          Build and run specified solution name (Does not save to the save file) [example:
+                                       primerust_solution_1]
 ```
