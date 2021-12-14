@@ -207,6 +207,7 @@ impl From<SaveOutput> for JSONCompatOutput {
             mut_result.remove("duration");
             let passes = mut_result["passes"].clone().unwrap().parse::<usize>().unwrap();
             mut_result.remove("passes");
+            mut_result.remove("passes/second");
             for tag_name in mut_result.clone().keys() {
                 let res = mut_result[tag_name].clone();
                 if res.is_none() {

@@ -1,6 +1,6 @@
 [package]
 name = "plummerprimes"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Westly Ward <sonicrules1234@gmail.com>"]
 description = "Builds, Runs, and reports benchmarks from https://github.com/PlummersSoftwareLLC/Primes"
