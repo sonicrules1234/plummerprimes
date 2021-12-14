@@ -2,7 +2,7 @@
 - docker
 
 # Setup
-This program is meant to be run in the https://github.com/PlummersSoftwareLLC/Primes
+This program is meant to be run in a copy of https://github.com/PlummersSoftwareLLC/Primes
 
 Install docker
 
