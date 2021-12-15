@@ -300,6 +300,10 @@ pub async fn run_benchmarks(raw_regex: &str, extra_regex: &str, target: &str) {
                     eprintln!("Skipping {} because build is disabled", name.clone());
                     continue;
                 }
+                if !solution_path.join("Dockerfile").exists() {
+                    eprintln!("Skipping {} because there is no Dockerfile", name.clone());
+                    continue;
+                }
                 let indiv_sols = get_solutions_from(reg.clone(), extra_reg.clone(), name.clone(), &rx, opts.clone(), solution_path.clone()).await;
                 for sol in indiv_sols.clone() {
                     benchmarks.push(LangOutput {language: lang.clone(), output: sol, solution_name: name.clone()});
@@ -320,7 +324,7 @@ pub async fn run_benchmarks(raw_regex: &str, extra_regex: &str, target: &str) {
             Err(TryRecvError::Disconnected) => "disconnected".to_string(), 
         };
     }
-    benchmarks.sort_by_key(|x| x.output.passes);
+    benchmarks.sort_by_key(|x| ordered_float::OrderedFloat(x.output.pps));
     benchmarks.reverse();
     let mut save_output_multi: Vec<HashMap<String, Option<String>>> = Vec::new();
     let mut save_output_single: Vec<HashMap<String, Option<String>>> = Vec::new();
