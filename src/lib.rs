@@ -1,4 +1,4 @@
-//mod dockerreader;
+//mod dockerread;
 mod systeminformation;
 use docker_api::image::BuildOpts;
 use std::io::Read;
@@ -36,7 +36,7 @@ struct PlummerPrimesConfig {
     #[structopt(long="save-file", parse(from_os_str), default_value="save.db")]
     save_file: PathBuf,
 
-    /// Write report file(s) to given file
+    /// Write report file(s) to given directory
     #[structopt(short, long="report-dir", parse(from_os_str), default_value="./")]
     report_dir: PathBuf,
 
@@ -144,13 +144,17 @@ struct CompatOutput {
 
 impl From<RegexOutput> for RunOutput {
     fn from(val: RegexOutput) -> RunOutput {
+        let mut extra = val.extra.clone();
+        if !val.extra.contains_key("faithful") {
+            extra.insert("faithful".to_string(), "no".to_string());
+        }
         RunOutput {
             label: val.clone().label,
             passes: val.clone().passes,
             duration: val.clone().duration,
             threads: val.threads,
             pps: (val.passes as f64 / val.duration.parse::<f64>().unwrap()),
-            extra: val.extra,
+            extra: extra,
         }
     }
 }
@@ -400,12 +404,17 @@ async fn process_docker_output(message: &[u8], buffer: String, outs: Vec<RunOutp
     let mut buf = buffer.clone();
     let mut outputs = outs.clone();
     let mut status = String::new();
-    let mut last = String::new();  
+    //let mut last = String::new();  
     buf.push_str(String::from_utf8_lossy(message).into_owned().as_str());
-    let split: Vec<&str> = buf.split("\n").collect();
-    let num_items = split.len();
-    for (num, b) in split.clone().into_iter().enumerate() {
-        last = b.to_string();
+    let buf2 = buf.clone();
+    //println!("Buf = {:?}", buf);
+    let mut split = buf2.split_once("\n").unwrap_or(("", buf2.as_str()));
+    //println!("split {:?}", split);
+    //let num_items = split.len();
+    //for b in split.clone().into_iter() {
+    while split.0 != "" {
+        //println!("split {:?}", split);
+        //let last = b.to_string();
         status = match rx.try_recv() {
             Ok(rx) => rx,
             Err(TryRecvError::Empty) => "keepgoing".to_string(),
@@ -414,25 +423,36 @@ async fn process_docker_output(message: &[u8], buffer: String, outs: Vec<RunOutp
         if status.as_str() != "keepgoing" {
             std::process::exit(1);
         }
-        if num == num_items - 1 && last == String::new() {
-            break;
-        }
+        //if num == num_items - 1 && last == String::new() {
+        //    break;
+        //}
         if opts.debug {
-            eprintln!("{}", last);
+            eprintln!("{}", split.0);
         }
-        if reg.clone().is_match(last.as_str()) {
+        if reg.clone().is_match(split.0) {
             if opts.debug {
                 eprintln!("Matched");
             }
-            let reg_out = RegexOutput::new(reg.clone(), extra_reg.clone(), last.as_str());
+            let reg_out = RegexOutput::new(reg.clone(), extra_reg.clone(), split.0);
             let run_out: RunOutput = reg_out.into();
             outputs.push(run_out);
+            //buf = String::new();
+
         } else if opts.debug  {
             eprintln!("Not a match");
         }
+        split = split.1.split_once("\n").unwrap_or(("", split.1))
     }
-
-    (last, outputs, status)
+    buf = split.1.to_string();
+    if status == String::new() {
+        status = match rx.try_recv() {
+            Ok(rx) => rx,
+            Err(TryRecvError::Empty) => "keepgoing".to_string(),
+            Err(TryRecvError::Disconnected) => "disconnected".to_string(), 
+        };
+    }
+    //println!("buf '{}'", buf);
+    (buf, outputs, status)
 }
 async fn get_solutions_from(reg: Regex, extra_reg: Regex, name: String, rx: &Receiver<String>, opts: PlummerPrimesConfig, directory: PathBuf) -> Vec<RunOutput> {
     let mut status = match rx.try_recv() {
@@ -499,6 +519,7 @@ async fn get_solutions_from(reg: Regex, extra_reg: Regex, name: String, rx: &Rec
     let tty = container.attach().await.unwrap();
     let mut stream = tty.split().0;
     let mut buf = String::new();
+    //let blah: String = stream.next().await;
     while let Some(msg) = stream.next().await {
         if status.as_str() != "keepgoing" {
             break
@@ -508,6 +529,7 @@ async fn get_solutions_from(reg: Regex, extra_reg: Regex, name: String, rx: &Rec
         buf = x.0.clone();
         outputs = x.1.clone();
         status = x.2.clone();
+        //println!("{:?}", x);
     }
     //assert_eq!(true, outputs.len() > 0 || vec!["primeawk_solution_1", "primecomal_solution_1", "primecsharp_solution_2"].into_iter().map(|a| a.to_string()).collect::<Vec<String>>().contains(&name));
     outputs
@@ -532,8 +554,8 @@ fn output_report(formatter: String, buf: Vec<u8>, base_name: String, report_dir:
     }
     alpha_single_keys.sort();
     alpha_multi_keys.sort();
-    let mut table_single = table_print::Table::new(alpha_single_keys.clone());
-    let mut table_multi = table_print::Table::new(alpha_multi_keys.clone());
+    let mut table_single = table_output::Table::new(alpha_single_keys.clone());
+    let mut table_multi = table_output::Table::new(alpha_multi_keys.clone());
     for out in save_output.single {
         let mut this_vec: Vec<String> = Vec::new();
         for key in alpha_single_keys.clone() {
@@ -544,7 +566,7 @@ fn output_report(formatter: String, buf: Vec<u8>, base_name: String, report_dir:
             }
             this_vec.push(value);
         }
-        table_single.insert_row(this_vec);
+        table_single.add_row(this_vec).unwrap();
     }
     for out in save_output.multi {
         let mut this_vec: Vec<String> = Vec::new();
@@ -556,17 +578,17 @@ fn output_report(formatter: String, buf: Vec<u8>, base_name: String, report_dir:
             }
             this_vec.push(value);
         }
-        table_multi.insert_row(this_vec);
+        table_multi.add_row(this_vec).unwrap();
     }
     if formatter.as_str() == "html" {
         let mut html_data = "<html>\n<head>\n<title>PlummerPrimes Output</title>\n</head>\n<body>\n".to_string();
         if output_single {
-            html_data.push_str("<p>Single Threaded</p>\n");
-            html_data.push_str(table_single.get_html_element().as_str());
+            //html_data.push_str("<p>Single Threaded</p>\n");
+            html_data.push_str(table_single.output_table_html(Some("Single Threaded")).as_str());
         }
         if output_multi {
-            html_data.push_str("\n<p>Multi Threaded</p>\n");
-            html_data.push_str(table_multi.get_html_element().as_str());
+            //html_data.push_str("\n<p>Multi Threaded</p>\n");
+            html_data.push_str(table_multi.output_table_html(Some("Multi Threaded")).as_str());
         }
         html_data.push_str("\n</body>\n</html>");
         let output_path = report_dir.join(format!("{}.html", base_name).as_str());
@@ -578,20 +600,24 @@ fn output_report(formatter: String, buf: Vec<u8>, base_name: String, report_dir:
         let output_path_multi = report_dir.join(format!("{}_multi.csv", base_name).as_str());
         if output_single {
             let mut o = fs::File::create(output_path_single.clone()).unwrap();
-            o.write_all(table_single.get_csv().as_bytes()).unwrap();
+            o.write_all(table_single.output_csv().as_bytes()).unwrap();
             println!("Saved report to {}", output_path_single.to_str().unwrap());
         }
         if output_multi {
             let mut o = fs::File::create(output_path_multi.clone()).unwrap();
             println!("Saved report to {}", output_path_multi.to_str().unwrap());
-            o.write_all(table_multi.get_csv().as_bytes()).unwrap();
+            o.write_all(table_multi.output_csv().as_bytes()).unwrap();
         }
     } else if formatter.as_str() == "table" {
-        let width = termsize::get().unwrap().cols;
-        
+        /*
+        let width = match termsize::get() {
+            Some(b) => b.cols,
+            None => 200,
+        };
+        */
         if output_single {
             println!("Single-threaded: ");
-            match table_single.get_pretty(width.into()) {
+            match table_single.output_pretty_table(None) {
                 Ok(s) => {
                     println!("{}", s);
                 },
@@ -602,7 +628,7 @@ fn output_report(formatter: String, buf: Vec<u8>, base_name: String, report_dir:
         }
         if output_multi {
             println!("Multi-threaded: ");
-            match table_multi.get_pretty(width.into()) {
+            match table_multi.output_pretty_table(None) {
                 Ok(s) => {
                     println!("{}", s);
                 },
