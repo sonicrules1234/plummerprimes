@@ -56,7 +56,7 @@ struct PlummerPrimesConfig {
     #[structopt(long="only-output-report")]
     only_output: bool,
 
-    /// List formats to output to
+    /// List formats that are possible to use for output
     #[structopt(short, long="list-formatters")]
     list_formatters: bool,
 
@@ -409,11 +409,16 @@ async fn process_docker_output(message: &[u8], buffer: String, outs: Vec<RunOutp
     let buf2 = buf.clone();
     //println!("Buf = {:?}", buf);
     let mut split = buf2.split_once("\n").unwrap_or(("", buf2.as_str()));
-    //println!("split {:?}", split);
+    //println!("split1 {:?}", split);
     //let num_items = split.len();
     //for b in split.clone().into_iter() {
-    while split.0 != "" {
-        //println!("split {:?}", split);
+    while split.0 != "" || (split.0 == "" && split.1.contains("\n")) {
+        //println!("split2 {:?}", split);
+        if split.1.contains("\n") && split.0 == "" {
+            split = split.1.split_once("\n").unwrap_or(("", split.1));
+            //println!("split3 {:?}", split);
+            continue;
+        }
         //let last = b.to_string();
         status = match rx.try_recv() {
             Ok(rx) => rx,
@@ -441,7 +446,8 @@ async fn process_docker_output(message: &[u8], buffer: String, outs: Vec<RunOutp
         } else if opts.debug  {
             eprintln!("Not a match");
         }
-        split = split.1.split_once("\n").unwrap_or(("", split.1))
+        split = split.1.split_once("\n").unwrap_or(("", split.1));
+        //println!("split4 {:?}", split);
     }
     buf = split.1.to_string();
     if status == String::new() {
@@ -531,6 +537,14 @@ async fn get_solutions_from(reg: Regex, extra_reg: Regex, name: String, rx: &Rec
         status = x.2.clone();
         //println!("{:?}", x);
     }
+    //println!("leftover {}", buf);
+    if buf != String::new() {
+        let x = process_docker_output("\n".as_bytes(), buf, outputs, rx, reg.clone(), extra_reg.clone(), opts.clone()).await;
+        //buf = x.0.clone();
+        outputs = x.1.clone();
+        //status = x.2.clone();
+    }
+    
     //assert_eq!(true, outputs.len() > 0 || vec!["primeawk_solution_1", "primecomal_solution_1", "primecsharp_solution_2"].into_iter().map(|a| a.to_string()).collect::<Vec<String>>().contains(&name));
     outputs
 }
